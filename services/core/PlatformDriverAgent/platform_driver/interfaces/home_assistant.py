@@ -155,6 +155,81 @@ class Interface(BasicRevert, BaseInterface):
             else:
                 _log.info(f"Currently, input_booleans only support state")
 
+        # Logic for SWITCH (Binary State: 1/0)
+        elif "switch." in register.entity_id:
+            if register.entity_point == "state":
+                if isinstance(register.value, int) and register.value in [0, 1]:
+                    if register.value == 1:
+                        self.turn_on_switch(register.entity_id)
+                    elif register.value == 0:
+                        self.turn_off_switch(register.entity_id)
+                else:
+                    error_msg = f"State value for {register.entity_id} (switch) must be 1 (on) or 0 (off)."
+                    _log.error(error_msg)
+                    raise ValueError(error_msg)
+            else:
+                error_msg = f"Switches only support writing to the 'state' point. Received: {register.entity_point}"
+                _log.error(error_msg)
+                raise ValueError(error_msg)
+
+        # Logic for FAN (State and Speed)
+        elif "fan." in register.entity_id:
+            # Check if setting the fan's power state (0 or 1)
+            if register.entity_point == "state":
+                if isinstance(register.value, int) and register.value in [0, 1]:
+                    if register.value == 1:
+                        self.turn_on_fan(register.entity_id)
+                    elif register.value == 0:
+                        self.turn_off_fan(register.entity_id)
+                else:
+                    error_msg = f"State value for {register.entity_id} (fan) must be 1 (on) or 0 (off)."
+                    _log.error(error_msg)
+                    raise ValueError(error_msg)
+            
+            # Check if setting the fan's speed
+            elif register.entity_point == "speed":
+                # Expecting integer values 1 (low), 2 (medium), or 3 (high)
+                if isinstance(register.value, int) and register.value in [1, 2, 3]:
+                    self.set_fan_speed(register.entity_id, register.value)
+                else:
+                    error_msg = "Fan speed value should be an integer between 1 (low) and 3 (high)."
+                    _log.error(error_msg)
+                    raise ValueError(error_msg)
+            else:
+                # Handle unsupported points for fan entities
+                error_msg = f"Fan entity does not support point writing for: {register.entity_point}"
+                _log.error(error_msg)
+                raise ValueError(error_msg)
+
+        # Logic for COVER (State and Position)
+        elif "cover." in register.entity_id:
+            # Check if setting the cover's state (1 for open, 0 for close)
+            if register.entity_point == "state":
+                if isinstance(register.value, int) and register.value in [0, 1]:
+                    if register.value == 1:
+                        self.open_cover(register.entity_id)
+                    elif register.value == 0:
+                        self.close_cover(register.entity_id)
+                else:
+                    error_msg = f"State value for {register.entity_id} (cover) must be 1 (open) or 0 (close)."
+                    _log.error(error_msg)
+                    raise ValueError(error_msg)
+
+            # Check if setting the cover's exact position (0-100%)
+            elif register.entity_point == "position":
+                # Position value must be an integer between 0 (fully closed) and 100 (fully open)
+                if isinstance(register.value, int) and 0 <= register.value <= 100:
+                    self.set_cover_position(register.entity_id, register.value)
+                else:
+                    error_msg = "Cover position value must be an integer between 0 and 100."
+                    _log.error(error_msg)
+                    raise ValueError(error_msg)
+            else:
+                # Handle unsupported points for cover entities
+                error_msg = f"Cover entity does not support point writing for: {register.entity_point}"
+                _log.error(error_msg)
+                raise ValueError(error_msg)
+
         # Changing thermostat values.
         elif "climate." in register.entity_id:
             if entity_point == "state":
@@ -236,17 +311,97 @@ class Interface(BasicRevert, BaseInterface):
                         attribute = entity_data.get("attributes", {}).get(f"{entity_point}", 0)
                         register.value = attribute
                         result[register.point_name] = attribute
-                # handling light states
-                elif "light." or "input_boolean." in entity_id: # Checks for lights or input bools since they have the same states.
+                
+                # Handle LIGHT (FIXED/SEPARATED Logic)
+                elif "light." in entity_id:
                     if entity_point == "state":
                         state = entity_data.get("state", None)
-                        # Converting light states to numbers.
+                        # Converting HA states ('on'/'off') to VOLTTRON numbers (1/0).
                         if state == "on":
                             register.value = 1
                             result[register.point_name] = 1
                         elif state == "off":
                             register.value = 0
                             result[register.point_name] = 0
+                    # For other points (like 'brightness'), check attributes
+                    else:
+                        attribute = entity_data.get("attributes", {}).get(f"{entity_point}", 0)
+                        register.value = attribute
+                        result[register.point_name] = attribute
+
+                # Handle INPUT_BOOLEAN (FIXED/SEPARATED Logic)
+                elif "input_boolean." in entity_id:
+                    if entity_point == "state":
+                        state = entity_data.get("state", None)
+                        # Converting HA states ('on'/'off') to VOLTTRON numbers (1/0).
+                        if state == "on":
+                            register.value = 1
+                            result[register.point_name] = 1
+                        elif state == "off":
+                            register.value = 0
+                            result[register.point_name] = 0
+                    # For other points, check attributes
+                    else:
+                        attribute = entity_data.get("attributes", {}).get(f"{entity_point}", 0)
+                        register.value = attribute
+                        result[register.point_name] = attribute
+
+                # Handle SWITCH (Binary State 1/0)
+                elif "switch." in entity_id:
+                    if entity_point == "state":
+                        state = entity_data.get("state", None)
+                        if state == "on":
+                            register.value = 1
+                            result[register.point_name] = 1
+                        elif state == "off":
+                            register.value = 0
+                            result[register.point_name] = 0
+                    # For other points, check attributes
+                    else:
+                        attribute = entity_data.get("attributes", {}).get(f"{entity_point}", 0)
+                        register.value = attribute
+                        result[register.point_name] = attribute
+
+                # Handle FAN (NEW: State and Speed)
+                elif "fan." in entity_id:
+                    if entity_point == "state":
+                        state = entity_data.get("state", None)
+                        if state == "on":
+                            register.value = 1
+                            result[register.point_name] = 1
+                        elif state == "off":
+                            register.value = 0
+                            result[register.point_name] = 0
+                    elif entity_point == "speed":
+                        # Map HA string speed ('low','medium','high') back to VOLTTRON int (1,2,3)
+                        speed = entity_data.get("attributes", {}).get("speed", None)
+                        speed_map = {"low": 1, "medium": 2, "high": 3}
+                        mapped_value = speed_map.get(speed.lower(), 0) if isinstance(speed, str) else 0
+                        register.value = mapped_value
+                        result[register.point_name] = mapped_value
+                    # Assigning other attributes
+                    else:
+                        attribute = entity_data.get("attributes", {}).get(f"{entity_point}", 0)
+                        register.value = attribute
+                        result[register.point_name] = attribute
+
+                # Handle COVER (NEW: State and Position)
+                elif "cover." in entity_id:
+                    if entity_point == "state":
+                        state = entity_data.get("state", None)
+                        # Mapping HA cover state ('open'/'closed') to VOLTTRON int (1/0)
+                        if state == "open":
+                            register.value = 1
+                            result[register.point_name] = 1
+                        elif state == "closed":
+                            register.value = 0
+                            result[register.point_name] = 0
+                    elif entity_point == "position":
+                        # Reading position (0-100) directly from attributes ('current_position')
+                        position = entity_data.get("attributes", {}).get("current_position", 0)
+                        register.value = position
+                        result[register.point_name] = position
+                    # Assigning other attributes
                     else:
                         attribute = entity_data.get("attributes", {}).get(f"{entity_point}", 0)
                         register.value = attribute
@@ -405,3 +560,116 @@ class Interface(BasicRevert, BaseInterface):
             print(f"Successfully set {entity_id} to {state}")
         else:
             print(f"Failed to set {entity_id} to {state}: {response.text}")
+
+    def turn_on_switch(self, entity_id):
+        """Turn on a Home Assistant switch entity."""
+        url = f"http://{self.ip_address}:{self.port}/api/services/switch/turn_on"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "entity_id": entity_id,
+        }
+        _post_method(url, headers, payload, f"turn on {entity_id}")
+
+    def turn_off_switch(self, entity_id):
+        """Turn off a Home Assistant switch entity."""
+        url = f"http://{self.ip_address}:{self.port}/api/services/switch/turn_off"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "entity_id": entity_id,
+        }
+        _post_method(url, headers, payload, f"turn off {entity_id}")
+
+    def turn_on_fan(self, entity_id):
+        """Turn on a Home Assistant fan entity using the 'fan.turn_on' service."""
+        url = f"http://{self.ip_address}:{self.port}/api/services/fan/turn_on"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "entity_id": entity_id,
+        }
+        _post_method(url, headers, payload, f"turn on fan {entity_id}")
+
+    def turn_off_fan(self, entity_id):
+        """Turn off a Home Assistant fan entity using the 'fan.turn_off' service."""
+        url = f"http://{self.ip_address}:{self.port}/api/services/fan/turn_off"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "entity_id": entity_id,
+        }
+        _post_method(url, headers, payload, f"turn off fan {entity_id}")
+
+    def set_fan_speed(self, entity_id, speed_value):
+        """
+        Set the speed of a Home Assistant fan entity (low, medium, high).
+        Maps integer speed_value (1=low, 2=medium, 3=high) to HA speed strings.
+        """
+        # Define the mapping from VOLTTRON integer to HA string
+        speed_map = {1: "low", 2: "medium", 3: "high"}
+        
+        if speed_value not in speed_map:
+            error_msg = f"Fan speed value must be 1 (low), 2 (medium), or 3 (high). Received: {speed_value}"
+            _log.error(error_msg)
+            raise ValueError(error_msg)
+
+        ha_speed = speed_map[speed_value]
+        url = f"http://{self.ip_address}:{self.port}/api/services/fan/set_speed"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "entity_id": entity_id,
+            "speed": ha_speed,
+        }
+        _post_method(url, headers, payload, f"set speed of fan {entity_id} to {ha_speed}")
+
+    def open_cover(self, entity_id):
+        """Open a Home Assistant cover entity using the 'cover.open_cover' service."""
+        url = f"http://{self.ip_address}:{self.port}/api/services/cover/open_cover"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "entity_id": entity_id,
+        }
+        _post_method(url, headers, payload, f"open cover {entity_id}")
+
+    def close_cover(self, entity_id):
+        """Close a Home Assistant cover entity using the 'cover.close_cover' service."""
+        url = f"http://{self.ip_address}:{self.port}/api/services/cover/close_cover"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "entity_id": entity_id,
+        }
+        _post_method(url, headers, payload, f"close cover {entity_id}")
+
+    def set_cover_position(self, entity_id, position):
+        """
+        Set the position of a Home Assistant cover entity to a specific percentage (0-100).
+        Requires the cover entity to support position control.
+        """
+        url = f"http://{self.ip_address}:{self.port}/api/services/cover/set_cover_position"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "entity_id": entity_id,
+            "position": position,
+        }
+        _post_method(url, headers, payload, f"set position of cover {entity_id} to {position}%")
