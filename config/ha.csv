@@ -1,0 +1,17 @@
+Point Name,Volttron Point Name,Entity ID,Entity Point,Units,Writable,Type,Notes
+# === EXISTING DEVICE EXAMPLE (Optional, for reference) ===
+KitchenLightState,KitchenLightState,light.kitchen,state,On/Off,TRUE,int,Light Power State (1=on, 0=off)
+KitchenLightBright,KitchenLightBright,light.kitchen,brightness,0-255,TRUE,int,Light Brightness (0-255)
+OfficeTempSet,OfficeTempSet,climate.office,temperature,F,TRUE,float,Thermostat Temperature Setpoint
+
+# === NEW FEATURE POINTS (MUST INCLUDE) ===
+# 1. SWITCH
+KitchenSwitchPower,KitchenSwitchPower,switch.kitchen_outlet,state,On/Off,TRUE,int,Switch Power On/Off (1/0)
+# 2. FAN
+FanPowerState,FanPowerState,fan.living_room,state,On/Off,TRUE,int,Fan Power On/Off (1/0)
+FanSpeedControl,FanSpeedControl,fan.living_room,speed,Low/Med/High,TRUE,int,Fan Speed (1=Low, 2=Med, 3=High)
+# 3. COVER
+BlindOpenClose,BlindOpenClose,cover.master_blind,state,Open/Closed,TRUE,int,Cover Open (1)/Close (0)
+BlindPositionSet,BlindPositionSet,cover.master_blind,position,%,TRUE,int,Cover Position (0-100)
+# 4. READ-ONLY EXAMPLE (Read a sensor state)
+LivingRoomTemp,LivingRoomTemp,sensor.living_temp,state,F,FALSE,float,Read-only Temperature Sensor
