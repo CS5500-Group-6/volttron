@@ -4,7 +4,12 @@ Home Assistant Driver
 =====================
 
 The Home Assistant driver enables VOLTTRON to read any data point from any Home Assistant controlled device.
-Currently control(write access) is supported only for lights(state and brightness) and thermostats(state and temperature).
+The driver supports write (control) operations for several entity types. In addition to lights (state and
+brightness) and thermostats (state and temperature), the driver now supports writing to:
+
+- fans (on/off, set speed by name or percentage)
+- covers (open/close/stop and set cover position 0-100)
+- switches (on/off)
 
 The following diagram shows interaction between platform driver agent and home assistant driver.
 
@@ -106,6 +111,172 @@ id 'light.example':
 
 
 .. note::
+
+Supported Write Points
++++++++++++++++++++++++
+
+The following examples show common writable registry entries and the equivalent Home Assistant service
+calls that the driver will perform when a write is requested.
+
+Fan (set speed by name or percentage)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Registry example (volttron point to control fan speed by name):
+
+.. code-block:: json
+
+    {
+         "Entity ID": "fan.kitchen_fan",
+         "Entity Point": "state",
+         "Volttron Point Name": "kitchen_fan_speed",
+         "Units": "string",
+         "Writable": true,
+         "Starting Value": "medium",
+         "Type": "string",
+         "Notes": "Accepts 'low', 'medium', 'high' or numeric percentage"
+    }
+
+Driver write examples (values written to the Volttron point):
+
+- Set speed by name: "high"
+- Set speed by percentage: 75
+
+Equivalent Home Assistant REST calls performed by the driver:
+
+- Set named speed (e.g. high):
+
+.. code-block:: http
+
+    POST /api/services/fan/set_speed HTTP/1.1
+    Content-Type: application/json
+    Authorization: Bearer <LONG_LIVED_TOKEN>
+
+    {"entity_id": "fan.kitchen_fan", "speed": "high"}
+
+- Set percentage speed:
+
+.. code-block:: http
+
+    POST /api/services/fan/set_percentage HTTP/1.1
+    Content-Type: application/json
+    Authorization: Bearer <LONG_LIVED_TOKEN>
+
+    {"entity_id": "fan.kitchen_fan", "percentage": 75}
+
+Cover (open/close/stop, or set position)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Registry example (volttron point to control cover position):
+
+.. code-block:: json
+
+    {
+         "Entity ID": "cover.window_blind",
+         "Entity Point": "position",
+         "Volttron Point Name": "window_blind_position",
+         "Units": "int",
+         "Writable": true,
+         "Starting Value": 0,
+         "Type": "int",
+         "Notes": "Position 0 (closed) - 100 (fully open)"
+    }
+
+Driver write examples (values written to the Volttron point):
+
+- Set absolute position: 50
+- Open/close by command: "open", "close", or boolean True/False
+
+Equivalent Home Assistant REST calls performed by the driver:
+
+- Set cover position to 50:
+
+.. code-block:: http
+
+    POST /api/services/cover/set_cover_position HTTP/1.1
+    Content-Type: application/json
+    Authorization: Bearer <LONG_LIVED_TOKEN>
+
+    {"entity_id": "cover.window_blind", "position": 50}
+
+- Open the cover (or boolean True):
+
+.. code-block:: http
+
+    POST /api/services/cover/open_cover HTTP/1.1
+    Content-Type: application/json
+    Authorization: Bearer <LONG_LIVED_TOKEN>
+
+    {"entity_id": "cover.window_blind"}
+
+- Close the cover (or boolean False):
+
+.. code-block:: http
+
+    POST /api/services/cover/close_cover HTTP/1.1
+    Content-Type: application/json
+    Authorization: Bearer <LONG_LIVED_TOKEN>
+
+    {"entity_id": "cover.window_blind"}
+
+Switch (on/off)
+~~~~~~~~~~~~~~~~
+
+Registry example (volttron point to control a switch):
+
+.. code-block:: json
+
+    {
+         "Entity ID": "switch.living_room",
+         "Entity Point": "state",
+         "Volttron Point Name": "living_room_switch",
+         "Units": "On / Off",
+         "Writable": true,
+         "Starting Value": false,
+         "Type": "boolean",
+         "Notes": "Boolean on/off control"
+    }
+
+Driver write example:
+
+- Write `true` → driver issues Home Assistant `switch.turn_on`
+- Write `false` → driver issues Home Assistant `switch.turn_off`
+
+.. note::
+
+Quick reference: supported write values and Home Assistant services
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. csv-table:: Supported write points
+    :header: Entity Type, Supported write values, Home Assistant service(s)
+
+    fan, on/off, speed name ('low','medium','high'), percentage (0-100), fan.turn_on/turn_off, fan.set_speed, fan.set_percentage
+    cover, open/close/stop, position (0-100), cover.open_cover, cover.close_cover, cover.stop_cover, cover.set_cover_position
+    light, on/off or brightness (int), light.turn_on, light.turn_off
+    climate, temperature (float/int) or hvac mode (string), climate.set_temperature, climate.set_hvac_mode
+    switch, on/off (boolean), switch.turn_on, switch.turn_off
+
+Writing to a Volttron point (example)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The recommended way to set a device point on the platform is via the Actuator (platform.actuator) RPC `set_point`.
+Below is a minimal agent-side Python example that instructs the platform to set a point. Replace the device topic
+with the device/topic you used when storing the driver configuration in the config store (see earlier examples).
+
+.. code-block:: python
+
+    # inside an agent method
+    # point_topic should be the full device point topic as used by your registry (example below)
+    point_topic = 'devices/BUILDING/ROOM/window_blind_position'
+    # write a 50% position to the cover
+    self.vip.rpc.call('platform.actuator', 'set_point', point_topic, 50)
+
+    # set a named fan speed
+    fan_point_topic = 'devices/BUILDING/ROOM/kitchen_fan_speed'
+    self.vip.rpc.call('platform.actuator', 'set_point', fan_point_topic, 'high')
+
+Note: the exact device/topic string depends on how you stored the driver's config/registry in the config store
+and the Volttron Point Name you provided in the registry file. Consult the Platform Driver documentation for the
+device topic naming conventions if needed.
 
 When using a single registry file to represent a logical group of multiple physical entities, make sure the
 "Volttron Point Name" is unique within a single registry file.
